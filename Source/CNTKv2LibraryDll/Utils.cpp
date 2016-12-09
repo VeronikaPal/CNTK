@@ -474,10 +474,13 @@ namespace CNTK
 
         auto varShape = var.Shape();
         auto valueShape = value->Shape();
+        // TODO: is this really possible to have valueShape.Rank() == varShape.Rank() (no dynamic axis)?
         if (valueShape.Rank() < varShape.Rank())
             InvalidArgument("Value's rank should be >= the Variable's rank");
 
         size_t maxAddionalValueAxes = std::max<size_t>(2, var.DynamicAxes().size());
+        // TODO: do we allow value shape to have extra dimensions, or should we verify instead, that
+        // valueShape.Rank() - varShape.Rank() ==  var.DynamicAxes().size() ?
         if (valueShape.Rank() > (varShape.Rank() + maxAddionalValueAxes))
             InvalidArgument("Value rank should be larger than the Variable%S rank at most by number of dynamic axes", ParanthesizedName(var.Name()).c_str());
 
@@ -502,11 +505,19 @@ namespace CNTK
         auto getNumTimeStepsAndSequencesFunc = [](const NDShape& maskShape) {
             size_t maxNumTimeSteps = 1;
             size_t numSequences = 1;
-            if (maskShape.Rank() > 0)
-                maxNumTimeSteps = maskShape[0];
-
             if (maskShape.Rank() > 1)
+            {
+                // since only 2 axes are supported at the moment, sequence axis should be the first and batch axis -- the last.
+                // sequence axis dimension determines the maximum number of time steps (= maximum sequence length),
+                // batch axis dimension -- the number of sequences (= 'training units') in a batch.
+                maxNumTimeSteps = maskShape[0];
                 numSequences = maskShape[1];
+            }
+            else if (maskShape.Rank() > 0)
+            {
+                // there's only one axis (the default batch axis).
+                numSequences = maskShape[0];
+            }
 
             return std::pair<size_t, size_t>(maxNumTimeSteps, numSequences);
         };
